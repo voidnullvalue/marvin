@@ -7,7 +7,7 @@ target="$target_dir/marvinrc.sh"
 source_line='[[ -r "$HOME/.local/lib/marvinrc.sh" ]] && source "$HOME/.local/lib/marvinrc.sh"'
 stamp="$(date +%Y%m%d-%H%M%S)"
 
-bash -n "$repo/marvinrc.sh"
+bash -n "$repo/marvinrc.sh" "$repo"/lib/*.sh
 mkdir -p "$target_dir"
 
 if [[ -e "$target" && ! -L "$target" ]]; then

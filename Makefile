@@ -11,4 +11,4 @@ shell:
 
 diff:
 	git diff --check
-	bash -n ./marvinrc.sh
+	bash -n ./marvinrc.sh ./lib/*.sh ./install.sh ./tests/smoke.sh
