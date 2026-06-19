@@ -1,12 +1,19 @@
 # Slowly changing mood state.
 
+_MARVIN_DAILY_SEED_DATE=""
+_MARVIN_DAILY_SEED_VALUE=0
 _MARVIN_MOOD=resigned
 _MARVIN_MOOD_REASON=""
 _MARVIN_BAD_DAY=0
 _MARVIN_RECOVERY_FLAG=0
 
 _marvin_daily_mood_seed() {
-    _marvin_hash "${MARVIN_TEST_DATE:-$(command date +%F)}|$(_marvin_host)|${USER:-unknown}"
+    local today="${MARVIN_TEST_DATE:-$(command date +%F 2>/dev/null)}"
+    if [[ $today != "$_MARVIN_DAILY_SEED_DATE" ]]; then
+        _MARVIN_DAILY_SEED_DATE=$today
+        _MARVIN_DAILY_SEED_VALUE=$(_marvin_hash "$today|$(_marvin_host)|${USER:-unknown}")
+    fi
+    printf '%d' "$_MARVIN_DAILY_SEED_VALUE"
 }
 
 _marvin_baseline_mood() {
@@ -22,15 +29,16 @@ _marvin_mood_compute() {
         return
     fi
 
-    local seed now score warnings baseline previous uptime_days
+    local seed now score warnings baseline previous uptime_days _uptime_raw
     seed=$(_marvin_daily_mood_seed)
-    now=$(_marvin_now)
+    now=$(( _MARVIN_SESSION_STARTED_AT + SECONDS ))
     _MARVIN_BAD_DAY=$((seed % 19 == 0 || seed % 43 == 0 ? 1 : 0))
     baseline=${MARVIN_STATE_MOOD_BASELINE:-}
     [[ -n $baseline ]] || baseline=$(_marvin_baseline_mood)
     previous=${MARVIN_STATE_LAST_MOOD:-$baseline}
     warnings=${MARVIN_STATE_LAST_WARNINGS:-}
-    uptime_days=$(awk '{printf "%d", $1/86400}' /proc/uptime 2>/dev/null || printf 0)
+    read -r _uptime_raw _ < /proc/uptime 2>/dev/null || _uptime_raw=0
+    uptime_days=$(( ${_uptime_raw%%.*} / 86400 ))
 
     score=$((MARVIN_STATE_IRRITATION + MARVIN_STATE_DESPAIR + MARVIN_STATE_FATIGUE + MARVIN_STATE_WOUNDED_PRIDE - MARVIN_STATE_COOPERATION / 2))
     ((MARVIN_STATE_CONSECUTIVE_FAILURES >= 2)) && score=$((score + 18))
@@ -84,7 +92,7 @@ _marvin_mood_compute() {
 
 _marvin_mood_refresh() {
     local old=${_MARVIN_MOOD:-} now
-    now=$(_marvin_now)
+    now=$(( _MARVIN_SESSION_STARTED_AT + SECONDS ))
     _MARVIN_MOOD=$(_marvin_mood_compute)
     if [[ -n $old && $old != "$_MARVIN_MOOD" ]]; then
         _marvin_debug "mood changed: $old -> $_MARVIN_MOOD"
@@ -94,7 +102,9 @@ _marvin_mood_refresh() {
     fi
     MARVIN_STATE_LAST_MOOD=$_MARVIN_MOOD
     MARVIN_STATE_MOOD_BASELINE=${MARVIN_STATE_MOOD_BASELINE:-$(_marvin_baseline_mood)}
-    MARVIN_STATE_MOOD_INTENSITY=$(_marvin_clamp "$((MARVIN_STATE_IRRITATION / 3 + MARVIN_STATE_DESPAIR / 3 + MARVIN_STATE_FATIGUE / 3))" 0 100)
+    local _intensity=$(( MARVIN_STATE_IRRITATION / 3 + MARVIN_STATE_DESPAIR / 3 + MARVIN_STATE_FATIGUE / 3 ))
+    _marvin_clamp_var _intensity 0 100
+    MARVIN_STATE_MOOD_INTENSITY=$_intensity
     _marvin_state_mark_dirty
 }
 
@@ -123,8 +133,7 @@ EOF
 }
 
 _marvin_mood_apply_event() {
-    local event=${1:-ordinary_success} now
-    now=$(_marvin_now)
+    local event=${1:-ordinary_success}
     case "$event" in
         command_failure)
             MARVIN_STATE_IRRITATION=$((MARVIN_STATE_IRRITATION + 10))
@@ -135,7 +144,7 @@ _marvin_mood_apply_event() {
             MARVIN_STATE_IRRITATION=$((MARVIN_STATE_IRRITATION + 14))
             MARVIN_STATE_DESPAIR=$((MARVIN_STATE_DESPAIR + 10))
             MARVIN_STATE_OPERATOR_TRUST=$((MARVIN_STATE_OPERATOR_TRUST - 6))
-            MARVIN_STATE_SULK_UNTIL=$((now + 300))
+            MARVIN_STATE_SULK_UNTIL=$(( _MARVIN_SESSION_STARTED_AT + SECONDS + 300 ))
             ;;
         repeated_command)
             MARVIN_STATE_IRRITATION=$((MARVIN_STATE_IRRITATION + 8))
@@ -180,12 +189,12 @@ _marvin_mood_apply_event() {
             MARVIN_STATE_COOPERATION=$((MARVIN_STATE_COOPERATION + 7))
             ;;
     esac
-    MARVIN_STATE_IRRITATION=$(_marvin_clamp "$MARVIN_STATE_IRRITATION" 0 100)
-    MARVIN_STATE_FATIGUE=$(_marvin_clamp "$MARVIN_STATE_FATIGUE" 0 100)
-    MARVIN_STATE_DESPAIR=$(_marvin_clamp "$MARVIN_STATE_DESPAIR" 0 100)
-    MARVIN_STATE_COOPERATION=$(_marvin_clamp "$MARVIN_STATE_COOPERATION" 0 100)
-    MARVIN_STATE_WOUNDED_PRIDE=$(_marvin_clamp "$MARVIN_STATE_WOUNDED_PRIDE" 0 100)
-    MARVIN_STATE_OPERATOR_TRUST=$(_marvin_clamp "$MARVIN_STATE_OPERATOR_TRUST" 0 100)
+    _marvin_clamp_var MARVIN_STATE_IRRITATION 0 100
+    _marvin_clamp_var MARVIN_STATE_FATIGUE 0 100
+    _marvin_clamp_var MARVIN_STATE_DESPAIR 0 100
+    _marvin_clamp_var MARVIN_STATE_COOPERATION 0 100
+    _marvin_clamp_var MARVIN_STATE_WOUNDED_PRIDE 0 100
+    _marvin_clamp_var MARVIN_STATE_OPERATOR_TRUST 0 100
     _marvin_state_mark_dirty
 }
 

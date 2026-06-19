@@ -1,5 +1,34 @@
 # Phrase selection, interpolation, cooldowns, and anti-repetition.
 
+# In-memory cache of the phrase history file (avoids tail/awk/grep per selection).
+_MARVIN_PHRASE_CACHE_TS=()
+_MARVIN_PHRASE_CACHE_EVENT=()
+_MARVIN_PHRASE_CACHE_ID=()
+_MARVIN_PHRASE_CACHE_TEXT=()
+_MARVIN_PHRASE_CACHE_LOADED=0
+
+_marvin_phrase_cache_load() {
+    ((_MARVIN_PHRASE_CACHE_LOADED == 1)) && return 0
+    _MARVIN_PHRASE_CACHE_LOADED=1
+    [[ -r $_MARVIN_PHRASE_FILE ]] || return 0
+    local ts event id text
+    while IFS=$'\t' read -r ts event id text; do
+        [[ -n $ts ]] || continue
+        _MARVIN_PHRASE_CACHE_TS+=("$ts")
+        _MARVIN_PHRASE_CACHE_EVENT+=("$event")
+        _MARVIN_PHRASE_CACHE_ID+=("$id")
+        _MARVIN_PHRASE_CACHE_TEXT+=("$text")
+    done < "$_MARVIN_PHRASE_FILE"
+    local n=${#_MARVIN_PHRASE_CACHE_TS[@]}
+    if ((n > 80)); then
+        local start=$((n - 80))
+        _MARVIN_PHRASE_CACHE_TS=("${_MARVIN_PHRASE_CACHE_TS[@]:$start}")
+        _MARVIN_PHRASE_CACHE_EVENT=("${_MARVIN_PHRASE_CACHE_EVENT[@]:$start}")
+        _MARVIN_PHRASE_CACHE_ID=("${_MARVIN_PHRASE_CACHE_ID[@]:$start}")
+        _MARVIN_PHRASE_CACHE_TEXT=("${_MARVIN_PHRASE_CACHE_TEXT[@]:$start}")
+    fi
+}
+
 _MARVIN_PHRASE_EVENTS=()
 _MARVIN_PHRASE_WEIGHTS=()
 _MARVIN_PHRASE_COOLDOWNS=()
@@ -267,30 +296,74 @@ _marvin_phrase_render() {
     printf '%s' "$text"
 }
 
+# Non-forking variant: writes rendered text into VARNAME via printf -v.
+_marvin_phrase_render_v() {
+    local _var=$1 _text=$2 _key _val
+    shift 2 || true
+    while (($#)); do
+        _key=$1; _val=${2:-}; shift 2 || true
+        _val=$(_marvin_sanitize_text "$_val")
+        _text=${_text//\{$_key\}/$_val}
+    done
+    _text=${_text//\{mood\}/${_MARVIN_MOOD:-resigned}}
+    if [[ $_text == *'{host}'* ]]; then
+        local _h="${HOSTNAME%%.*}"
+        [[ -n $_h ]] || { _h=$(hostname 2>/dev/null); _h=${_h%%.*}; }
+        _text=${_text//\{host\}/$_h}
+    fi
+    printf -v "$_var" '%s' "$_text"
+}
+
 _marvin_phrase_recent_contains() {
-    local phrase=$1
-    [[ -r $_MARVIN_PHRASE_FILE ]] || return 1
-    tail -n 25 "$_MARVIN_PHRASE_FILE" 2>/dev/null | awk -F '\t' '{print $3}' | grep -Fxq "$phrase"
+    local phrase=$1 i n start
+    _marvin_phrase_cache_load
+    n=${#_MARVIN_PHRASE_CACHE_ID[@]}
+    (( start = n > 25 ? n - 25 : 0 ))
+    for ((i = start; i < n; i++)); do
+        [[ ${_MARVIN_PHRASE_CACHE_ID[$i]} == "$phrase" ]] && return 0
+    done
+    return 1
 }
 
 _marvin_phrase_remember() {
-    local event=$1 phrase=$2 id=${3:-unknown} now tmp
+    local event=$1 phrase=$2 id=${3:-unknown} now
     _marvin_ensure_dirs
-    now=$(_marvin_now)
+    now=$(( _MARVIN_SESSION_STARTED_AT + SECONDS ))
     printf '%s\t%s\t%s\t%s\n' "$now" "$event" "$id" "$phrase" >> "$_MARVIN_PHRASE_FILE"
-    tmp="$_MARVIN_PHRASE_FILE.$$"
-    tail -n 80 "$_MARVIN_PHRASE_FILE" > "$tmp" 2>/dev/null || true
-    mv "$tmp" "$_MARVIN_PHRASE_FILE"
+    # Update in-memory cache
+    _marvin_phrase_cache_load
+    _MARVIN_PHRASE_CACHE_TS+=("$now")
+    _MARVIN_PHRASE_CACHE_EVENT+=("$event")
+    _MARVIN_PHRASE_CACHE_ID+=("$id")
+    _MARVIN_PHRASE_CACHE_TEXT+=("$phrase")
+    # Trim file and cache when they exceed 80 entries
+    local n=${#_MARVIN_PHRASE_CACHE_TS[@]}
+    if ((n > 80)); then
+        local start=$((n - 80)) tmp
+        _MARVIN_PHRASE_CACHE_TS=("${_MARVIN_PHRASE_CACHE_TS[@]:$start}")
+        _MARVIN_PHRASE_CACHE_EVENT=("${_MARVIN_PHRASE_CACHE_EVENT[@]:$start}")
+        _MARVIN_PHRASE_CACHE_ID=("${_MARVIN_PHRASE_CACHE_ID[@]:$start}")
+        _MARVIN_PHRASE_CACHE_TEXT=("${_MARVIN_PHRASE_CACHE_TEXT[@]:$start}")
+        tmp="$_MARVIN_PHRASE_FILE.$$"
+        tail -n 80 "$_MARVIN_PHRASE_FILE" > "$tmp" 2>/dev/null || true
+        mv "$tmp" "$_MARVIN_PHRASE_FILE"
+    fi
     chmod 600 "$_MARVIN_PHRASE_FILE" 2>/dev/null || true
 }
 
 _marvin_phrase_cooldown_ok() {
-    local event=$1 phrase=$2 cooldown=$3 now last
+    local event=$1 phrase=$2 cooldown=$3 now last=0 i
     [[ $cooldown =~ ^[0-9]+$ ]] || cooldown=0
     ((cooldown == 0)) && return 0
-    [[ -r $_MARVIN_PHRASE_FILE ]] || return 0
-    now=$(_marvin_now)
-    last=$(awk -F '\t' -v e="$event" -v p="$phrase" '$2==e && ($3==p || $4==p) {v=$1} END {print v+0}' "$_MARVIN_PHRASE_FILE" 2>/dev/null)
+    _marvin_phrase_cache_load
+    now=$(( _MARVIN_SESSION_STARTED_AT + SECONDS ))
+    for ((i = ${#_MARVIN_PHRASE_CACHE_TS[@]} - 1; i >= 0; i--)); do
+        [[ ${_MARVIN_PHRASE_CACHE_EVENT[$i]} == "$event" ]] || continue
+        if [[ ${_MARVIN_PHRASE_CACHE_ID[$i]} == "$phrase" || ${_MARVIN_PHRASE_CACHE_TEXT[$i]} == "$phrase" ]]; then
+            last=${_MARVIN_PHRASE_CACHE_TS[$i]}
+            break
+        fi
+    done
     ((last == 0 || now - last >= cooldown))
 }
 
@@ -301,35 +374,41 @@ _marvin_phrase_mood_ok() {
 }
 
 _marvin_phrase() {
-    local event=$1 i total=0 weight roll acc=0 rendered chosen="" chosen_id="" count=0
-    shift || true
+    local _p; _marvin_phrase_v _p "$@"; printf '%s\n' "$_p"
+}
+
+# Non-forking phrase selection: writes chosen phrase into VARNAME.
+_marvin_phrase_v() {
+    local _var=$1 event=$2
+    shift 2 || true
+    local i total=0 weight acc=0 rendered chosen="" chosen_id="" _roll_h roll
     _marvin_phrases_load
 
     for i in "${!_MARVIN_PHRASE_EVENTS[@]}"; do
         [[ ${_MARVIN_PHRASE_EVENTS[$i]} == "$event" ]] || continue
         _marvin_phrase_mood_ok "${_MARVIN_PHRASE_MOODS[$i]}" || continue
-        rendered=$(_marvin_phrase_render "${_MARVIN_PHRASE_TEXTS[$i]}" "$@")
+        _marvin_phrase_render_v rendered "${_MARVIN_PHRASE_TEXTS[$i]}" "$@"
         _marvin_phrase_recent_contains "${_MARVIN_PHRASE_IDS[$i]}" && continue
         _marvin_phrase_cooldown_ok "$event" "$rendered" "${_MARVIN_PHRASE_COOLDOWNS[$i]}" || continue
         weight=${_MARVIN_PHRASE_WEIGHTS[$i]}
         [[ $weight =~ ^[0-9]+$ ]] || weight=1
         total=$((total + weight))
-        count=$((count + 1))
     done
 
     if ((total == 0)); then
         for i in "${!_MARVIN_PHRASE_EVENTS[@]}"; do
             [[ ${_MARVIN_PHRASE_EVENTS[$i]} == "$event" ]] || continue
-            chosen=$(_marvin_phrase_render "${_MARVIN_PHRASE_TEXTS[$i]}" "$@")
+            _marvin_phrase_render_v chosen "${_MARVIN_PHRASE_TEXTS[$i]}" "$@"
             chosen_id=${_MARVIN_PHRASE_IDS[$i]}
             break
         done
     else
-        roll=$(( $(_marvin_hash "$event|$_MARVIN_SESSION_ID|$SECONDS|$RANDOM|${_MARVIN_MOOD:-resigned}") % total ))
+        _marvin_hash_v _roll_h "$event|$_MARVIN_SESSION_ID|$SECONDS|$RANDOM|${_MARVIN_MOOD:-resigned}"
+        roll=$(( _roll_h % total ))
         for i in "${!_MARVIN_PHRASE_EVENTS[@]}"; do
             [[ ${_MARVIN_PHRASE_EVENTS[$i]} == "$event" ]] || continue
             _marvin_phrase_mood_ok "${_MARVIN_PHRASE_MOODS[$i]}" || continue
-            rendered=$(_marvin_phrase_render "${_MARVIN_PHRASE_TEXTS[$i]}" "$@")
+            _marvin_phrase_render_v rendered "${_MARVIN_PHRASE_TEXTS[$i]}" "$@"
             _marvin_phrase_recent_contains "${_MARVIN_PHRASE_IDS[$i]}" && continue
             _marvin_phrase_cooldown_ok "$event" "$rendered" "${_MARVIN_PHRASE_COOLDOWNS[$i]}" || continue
             weight=${_MARVIN_PHRASE_WEIGHTS[$i]}
@@ -347,7 +426,7 @@ _marvin_phrase() {
     [[ -n $chosen_id ]] || chosen_id="fallback.$event"
     _marvin_phrase_remember "$event" "$chosen" "$chosen_id"
     [[ ${MARVIN_PHRASE_DEBUG:-0} == 1 ]] && printf '[%s] ' "$chosen_id"
-    printf '%s\n' "$chosen"
+    printf -v "$_var" '%s' "$chosen"
 }
 
 _marvin_should_comment() {
@@ -361,11 +440,12 @@ _marvin_should_comment() {
 }
 
 _marvin_say() {
-    local event=$1
+    local event=$1 _phrase
     shift || true
     _marvin_should_comment "$event" || return 0
+    _marvin_phrase_v _phrase "$event" "$@"
     printf '%s' "$_MV_GREY"
-    _marvin_wrap "$(_marvin_phrase "$event" "$@")"
+    _marvin_wrap "$_phrase"
     printf '%s' "$_MV_RESET"
 }
 

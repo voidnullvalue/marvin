@@ -78,13 +78,13 @@ _marvin_state_validate() {
     do
         [[ ${!n:-} =~ ^[0-9]+$ ]] || printf -v "$n" '%s' 0
     done
-    MARVIN_STATE_MOOD_INTENSITY=$(_marvin_clamp "$MARVIN_STATE_MOOD_INTENSITY" 0 100)
-    MARVIN_STATE_IRRITATION=$(_marvin_clamp "$MARVIN_STATE_IRRITATION" 0 100)
-    MARVIN_STATE_FATIGUE=$(_marvin_clamp "$MARVIN_STATE_FATIGUE" 0 100)
-    MARVIN_STATE_DESPAIR=$(_marvin_clamp "$MARVIN_STATE_DESPAIR" 0 100)
-    MARVIN_STATE_COOPERATION=$(_marvin_clamp "$MARVIN_STATE_COOPERATION" 0 100)
-    MARVIN_STATE_WOUNDED_PRIDE=$(_marvin_clamp "$MARVIN_STATE_WOUNDED_PRIDE" 0 100)
-    MARVIN_STATE_OPERATOR_TRUST=$(_marvin_clamp "$MARVIN_STATE_OPERATOR_TRUST" 0 100)
+    _marvin_clamp_var MARVIN_STATE_MOOD_INTENSITY 0 100
+    _marvin_clamp_var MARVIN_STATE_IRRITATION 0 100
+    _marvin_clamp_var MARVIN_STATE_FATIGUE 0 100
+    _marvin_clamp_var MARVIN_STATE_DESPAIR 0 100
+    _marvin_clamp_var MARVIN_STATE_COOPERATION 0 100
+    _marvin_clamp_var MARVIN_STATE_WOUNDED_PRIDE 0 100
+    _marvin_clamp_var MARVIN_STATE_OPERATOR_TRUST 0 100
 }
 
 _marvin_state_mark_dirty() {
@@ -147,7 +147,7 @@ _marvin_state_set_last_command() {
 _marvin_history_add() {
     local event=${1:-event} detail=${2:-} tmp now
     _marvin_ensure_dirs
-    now=$(command date +%s 2>/dev/null || printf 0)
+    now=$(( _MARVIN_SESSION_STARTED_AT + SECONDS ))
     detail=$(_marvin_sanitize_text "$detail")
     printf '%s\t%s\t%s\n' "$now" "$event" "$detail" >> "$_MARVIN_HISTORY_FILE"
     tmp="$_MARVIN_HISTORY_FILE.$$"
@@ -171,7 +171,7 @@ _marvin_history_show() {
 
 _marvin_state_note_login() {
     local now boot_id
-    now=$(command date +%s 2>/dev/null || printf 0)
+    now=$(( _MARVIN_SESSION_STARTED_AT + SECONDS ))
     boot_id=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null || printf 'unknown')
     if [[ -n $MARVIN_STATE_LAST_BOOT_ID && $MARVIN_STATE_LAST_BOOT_ID != "$boot_id" ]]; then
         _MARVIN_REBOOT_DETECTED=1

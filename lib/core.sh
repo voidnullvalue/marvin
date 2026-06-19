@@ -53,7 +53,33 @@ _marvin_host() {
 }
 
 _marvin_hash() {
-    printf '%s' "$*" | cksum | awk '{print $1}'
+    local str="$*" h=5381 i c
+    for ((i = 0; i < ${#str} && i < 128; i++)); do
+        printf -v c '%d' "'${str:i:1}" 2>/dev/null || c=0
+        h=$(( ((h << 5) + h) ^ c ))
+        h=$(( h & 0x7FFFFFFF ))
+    done
+    printf '%d' "$h"
+}
+
+# Non-forking variant: writes hash into VARNAME.
+_marvin_hash_v() {
+    local _hvar=$1 str="${*:2}" h=5381 i c
+    for ((i = 0; i < ${#str} && i < 128; i++)); do
+        printf -v c '%d' "'${str:i:1}" 2>/dev/null || c=0
+        h=$(( ((h << 5) + h) ^ c ))
+        h=$(( h & 0x7FFFFFFF ))
+    done
+    printf -v "$_hvar" '%d' "$h"
+}
+
+# Set VARNAME to value clamped to [min,max] without a subshell.
+_marvin_clamp_var() {
+    local _v=${!1:-0} _min=${2:-0} _max=${3:-100}
+    [[ $_v =~ ^-?[0-9]+$ ]] || _v=0
+    ((_v < _min)) && _v=$_min
+    ((_v > _max)) && _v=$_max
+    printf -v "$1" '%d' "$_v"
 }
 
 _marvin_clamp() {
@@ -65,12 +91,12 @@ _marvin_clamp() {
 }
 
 _marvin_now() {
-    command date +%s 2>/dev/null || printf 0
+    printf '%d' $(( _MARVIN_SESSION_STARTED_AT + SECONDS ))
 }
 
 _marvin_cols() {
-    local n
-    n=$(tput cols 2>/dev/null || printf '80')
+    local n="${COLUMNS:-0}"
+    [[ $n =~ ^[0-9]+$ && $n -gt 0 ]] || n=$(tput cols 2>/dev/null || printf '80')
     [[ $n =~ ^[0-9]+$ ]] || n=80
     ((n < 58)) && n=58
     ((n > 120)) && n=120
@@ -122,14 +148,20 @@ _marvin_personality_enabled() {
 }
 
 _marvin_comment_gate() {
-    local event=${1:-generic} rate=${2:-${MARVIN_COMMENT_RATE:-100}} seed roll
+    local event=${1:-generic} rate=${2:-${MARVIN_COMMENT_RATE:-100}} h=5381 i c str roll
     _marvin_personality_enabled || return 1
     [[ ${MARVIN_QUIET:-0} == 1 || -e $HOME/.marvinquiet ]] && return 1
     [[ $rate =~ ^[0-9]+$ ]] || rate=100
     ((rate <= 0)) && return 1
     ((rate >= 100)) && return 0
-    seed=$(_marvin_hash "$event|$_MARVIN_SESSION_ID|$SECONDS|$RANDOM")
-    roll=$((seed % 100))
+    # Inline djb2 hash to avoid $() subshell for _marvin_hash
+    str="$event|$_MARVIN_SESSION_ID|$SECONDS|$RANDOM"
+    for ((i = 0; i < ${#str} && i < 128; i++)); do
+        printf -v c '%d' "'${str:i:1}" 2>/dev/null || c=0
+        h=$(( ((h << 5) + h) ^ c ))
+        h=$(( h & 0x7FFFFFFF ))
+    done
+    roll=$(( h % 100 ))
     ((roll < rate))
 }
 

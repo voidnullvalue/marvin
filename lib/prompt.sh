@@ -75,7 +75,7 @@ _marvin_update_command_state() {
         MARVIN_STATE_RECENT_LONG_COMMANDS=$((MARVIN_STATE_RECENT_LONG_COMMANDS - 1))
     fi
     MARVIN_STATE_LAST_COMMAND=$command_line
-    MARVIN_STATE_LAST_INTERACTION=$(_marvin_now)
+    MARVIN_STATE_LAST_INTERACTION=$(( _MARVIN_SESSION_STARTED_AT + SECONDS ))
     if ((rc != 0)); then
         if ((MARVIN_STATE_CONSECUTIVE_FAILURES >= 2)); then
             _marvin_mood_apply_event repeated_failure
@@ -135,7 +135,7 @@ _marvin_comment_after_command() {
 
 _marvin_idle_check() {
     local now last idle
-    now=$(_marvin_now)
+    now=$(( _MARVIN_SESSION_STARTED_AT + SECONDS ))
     last=${MARVIN_STATE_LAST_INTERACTION:-0}
     [[ $last =~ ^[0-9]+$ ]] || last=0
     idle=$((now - last))
@@ -203,10 +203,16 @@ _marvin_prompt_install() {
 
 _marvin_benchmark() {
     local i start end total avg
+    # Warm up caches
     _marvin_telemetry_refresh
+    _MARVIN_WARNING_CACHE_TIME=0
+    _marvin_warning_state >/dev/null
+
+    # Cached-path: telemetry TTL not yet expired, warning state cached
     start=$(command date +%s%N 2>/dev/null || printf 0)
     for i in {1..25}; do
         _marvin_telemetry_refresh
+        _marvin_warning_state >/dev/null
         _marvin_git_prompt "$_MARVIN_T_GIT" >/dev/null
     done
     end=$(command date +%s%N 2>/dev/null || printf 0)
@@ -216,5 +222,25 @@ _marvin_benchmark() {
         printf 'cached_prompt_approx_ms=%s\n' "$avg"
     else
         printf 'cached_prompt_approx_ms=unknown\n'
+    fi
+
+    # Uncached-path: force telemetry and warning expiry each iteration
+    start=$(command date +%s%N 2>/dev/null || printf 0)
+    for i in {1..10}; do
+        _MARVIN_TELEMETRY_CACHE_TIME=0
+        _MARVIN_WARNING_CACHE_TIME=0
+        _MARVIN_UPDATES_CACHE_TIME=0
+        _MARVIN_DOWN_SERVICES_CACHE_TIME=0
+        _marvin_telemetry_refresh
+        _marvin_warning_state >/dev/null
+        _marvin_git_prompt "$_MARVIN_T_GIT" >/dev/null
+    done
+    end=$(command date +%s%N 2>/dev/null || printf 0)
+    if [[ $start =~ ^[0-9]+$ && $end =~ ^[0-9]+$ && $end -gt $start ]]; then
+        total=$(((end - start) / 1000000))
+        avg=$((total / 10))
+        printf 'full_refresh_approx_ms=%s\n' "$avg"
+    else
+        printf 'full_refresh_approx_ms=unknown\n'
     fi
 }
