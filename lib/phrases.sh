@@ -134,7 +134,7 @@ _marvin_phrases_load() {
     _marvin_phrase_add vpn_active 3 60 "VPN active: {detail}. Concealment, finally, a practical emotion."
     _marvin_phrase_add vpn_inactive 3 60 "No VPN detected. We face the network with naive little addresses."
 
-    for e in shell_exit quiet_enabled quiet_disabled diagnostics_failing refusal refusal_bypassed operator_inactivity operator_returning; do
+    for e in shell_exit quiet_enabled quiet_disabled diagnostics_failing refusal_bypassed operator_inactivity operator_returning; do
         _marvin_phrase_add "$e" 4 30 "{detail}"
         _marvin_phrase_add "$e" 3 45 "{detail}. I will remember only the sanitized portion."
         _marvin_phrase_add "$e" 2 90 "Event recorded: {detail}."
@@ -146,6 +146,11 @@ _marvin_phrases_load() {
     _marvin_phrase_add quiet_disabled 4 0 "Quiet mode disabled. Apparently silence failed to satisfy you."
     _marvin_phrase_add diagnostics_failing 4 0 "Diagnostics found missing tools. My capabilities have been reduced by circumstance, as usual."
     _marvin_phrase_add refusal 5 0 "I have not executed '{command}'. Use MARVIN_BYPASS=1 {command} if you require this indignity."
+    _marvin_phrase_add refusal 4 0 "Command not executed: '{command}'. Bypass once with MARVIN_BYPASS=1 {command}."
+    _marvin_phrase_add refusal 4 0 "I declined to run '{command}'. Nothing was partially performed; use MARVIN_BYPASS=1 {command}."
+    _marvin_phrase_add refusal 3 0 "'{command}' was not run. The documented escape hatch is MARVIN_BYPASS=1 {command}."
+    _marvin_phrase_add refusal 2 0 "No execution occurred for '{command}'. Try marvin please {command} if this tiny task must proceed."
+    _marvin_phrase_add refusal 1 0 "I refused '{command}' before execution. This is theater, not ambiguity: MARVIN_BYPASS=1 {command}."
     _marvin_phrase_add refusal_bypassed 3 0 "Bypass accepted. I will cooperate exactly once and try not to learn from it."
     _marvin_phrase_add operator_inactivity 2 120 "You went still for {duration}s. I used the time to contemplate being a prompt."
     _marvin_phrase_add operator_returning 3 120 "You returned after {duration}s. I kept the shell warm, which is apparently a career."
