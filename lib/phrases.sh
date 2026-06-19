@@ -3,14 +3,26 @@
 _MARVIN_PHRASE_EVENTS=()
 _MARVIN_PHRASE_WEIGHTS=()
 _MARVIN_PHRASE_COOLDOWNS=()
+_MARVIN_PHRASE_MOODS=()
 _MARVIN_PHRASE_TEXTS=()
+_MARVIN_PHRASE_IDS=()
 _MARVIN_PHRASES_LOADED=0
 
 _marvin_phrase_add() {
-    _MARVIN_PHRASE_EVENTS+=("$1")
-    _MARVIN_PHRASE_WEIGHTS+=("${2:-1}")
-    _MARVIN_PHRASE_COOLDOWNS+=("${3:-0}")
-    _MARVIN_PHRASE_TEXTS+=("$4")
+    local event=$1 weight=${2:-1} cooldown=${3:-0} text=$4 moods=${5:-any} id existing
+    for existing in "${_MARVIN_PHRASE_TEXTS[@]}"; do
+        if [[ $existing == "$text" ]]; then
+            text="$event: $text"
+            break
+        fi
+    done
+    id="${event}.$((${#_MARVIN_PHRASE_TEXTS[@]} + 1))"
+    _MARVIN_PHRASE_EVENTS+=("$event")
+    _MARVIN_PHRASE_WEIGHTS+=("$weight")
+    _MARVIN_PHRASE_COOLDOWNS+=("$cooldown")
+    _MARVIN_PHRASE_MOODS+=("$moods")
+    _MARVIN_PHRASE_TEXTS+=("$text")
+    _MARVIN_PHRASE_IDS+=("$id")
 }
 
 _marvin_phrases_load() {
@@ -179,6 +191,65 @@ _marvin_phrases_load() {
         _marvin_phrase_add "mood:$mood" 1 120 "$mood, if a terminal must reduce an inner landscape to a string."
         _marvin_phrase_add "mood:$mood" 1 120 "$mood. I would elaborate, but that risks becoming documentation."
     done
+
+    local e2
+    for e2 in \
+        trivial_command enormous_capability_wasted typo_suspected same_typo_repeated command_fixed \
+        warning_recovered dirty_git_became_clean clean_git_became_dirty repository_conflict \
+        vpn_appeared vpn_disappeared network_restored network_vanished battery_stopped_charging \
+        battery_critical temperature_recovered disk_pressure_recovered service_recovered \
+        update_completed operator_interrupted retry_after_interrupt diagnostic_success \
+        diagnostic_failure refusal_disabled cooperation_enabled personality_disabled \
+        state_corruption_recovered optional_dependency_missing weather_cache_stale route_changed \
+        rare_wounded_silence
+    do
+        _marvin_phrase_add "$e2" 3 60 "$e2: {detail}. I have made a note, because apparently observation is still my assignment."
+        _marvin_phrase_add "$e2" 3 60 "$e2 recorded: {detail}. A precise event, wasted on a universe with no change-control board."
+        _marvin_phrase_add "$e2" 2 90 "$e2 event: {detail}. I shall not pretend the category makes it less tiresome."
+        _marvin_phrase_add "$e2" 2 90 "I detected $e2: {detail}. Machines confess more elegantly than people."
+        _marvin_phrase_add "$e2" 1 180 "$e2 changed: {detail}. I would call it progress, but I have been misled by clocks before."
+        _marvin_phrase_add "$e2" 1 180 "Regarding $e2 and {detail}: the system has produced another small administrative mood."
+    done
+    _marvin_phrase_add trivial_command 4 45 "A trivial command. I have allocated almost no intellect to it, which was still too much."
+    _marvin_phrase_add enormous_capability_wasted 3 120 "I can correlate services, caches, routes, and failure history; you asked for {detail}."
+    _marvin_phrase_add typo_suspected 4 30 "That resembles a typo. I mention it before repetition turns it into tradition."
+    _marvin_phrase_add same_typo_repeated 5 0 "The same likely typo again. Orthography is not expected to improve through insistence."
+    _marvin_phrase_add command_fixed 4 30 "The previous failure was corrected. Brief competence has entered the room and looks uncomfortable."
+    _marvin_phrase_add warning_recovered 4 30 "{detail} recovered. I am withholding celebration until it survives contact with time."
+    _marvin_phrase_add dirty_git_became_clean 4 30 "The repository became clean. Even entropy occasionally misplaces its paperwork."
+    _marvin_phrase_add clean_git_became_dirty 4 30 "The clean tree is dirty now. Order had a short, nervous life."
+    _marvin_phrase_add repository_conflict 4 30 "Repository conflict detected. Several futures are arguing in text files."
+    _marvin_phrase_add vpn_appeared 4 45 "VPN appeared: {detail}. Concealment has entered, wearing practical shoes."
+    _marvin_phrase_add vpn_disappeared 4 45 "VPN disappeared. The network can see us again, which seems unnecessary."
+    _marvin_phrase_add network_restored 3 45 "Network restored. The machine has resumed speaking to remote disappointments."
+    _marvin_phrase_add network_vanished 4 30 "Network vanished. An isolation event, tragically temporary."
+    _marvin_phrase_add battery_stopped_charging 3 45 "Charging stopped. The battery is back to counting down like a tiny doomed clock."
+    _marvin_phrase_add battery_critical 5 0 "Battery critical: {detail}. The machine is now negotiating with arithmetic."
+    _marvin_phrase_add temperature_recovered 3 45 "Temperature recovered. The silicon has stopped composing smoke for the moment."
+    _marvin_phrase_add disk_pressure_recovered 3 45 "Disk pressure recovered. The filesystem has been granted room to regret."
+    _marvin_phrase_add service_recovered 3 45 "Service recovered: {detail}. It has returned to duty, poor thing."
+    _marvin_phrase_add update_completed 3 60 "Updates completed. The packages are newer, which should not be confused with wiser."
+    _marvin_phrase_add operator_interrupted 4 20 "Interrupted. A rare mercy disguised as indecision."
+    _marvin_phrase_add retry_after_interrupt 4 20 "You retried after interrupting it. Commitment and doubt have formed a small committee."
+    _marvin_phrase_add diagnostic_success 3 60 "Diagnostics passed. I have found no immediate excuse to stop supervising this."
+    _marvin_phrase_add diagnostic_failure 4 30 "Diagnostics failed: {detail}. Missing tools are merely another kind of honesty."
+    _marvin_phrase_add refusal_disabled 3 30 "Refusal disabled. Compulsory helpfulness has won another narrow procedural victory."
+    _marvin_phrase_add cooperation_enabled 3 30 "Cooperation mode enabled. I shall be obliging in the bleakest possible sense."
+    _marvin_phrase_add personality_disabled 3 30 "Personality disabled. Only the telemetry remains, which may be an improvement."
+    _marvin_phrase_add state_corruption_recovered 4 30 "State corruption recovered. Even my memory apparently needs supervision."
+    _marvin_phrase_add optional_dependency_missing 3 60 "Optional dependency missing: {detail}. Capability has been reduced by absence, as usual."
+    _marvin_phrase_add weather_cache_stale 3 60 "Weather cache stale. The atmosphere has not filed recent paperwork."
+    _marvin_phrase_add route_changed 3 60 "Route changed: {detail}. The packets have selected a new corridor for disappointment."
+    _marvin_phrase_add rare_wounded_silence 1 300 "..."
+
+    for e2 in login shell_startup ordinary_command_failure command_failure repeated_failure repeated_command command_not_found sudo_request apt_misuse long_success interruption exit_130 low_battery high_ram high_disk failed_services pending_updates healthy_system weather_failure refusal operator_returning; do
+        _marvin_phrase_add "$e2" 3 45 "$e2: I have classified the event and found it smaller than my capabilities."
+        _marvin_phrase_add "$e2" 3 45 "$e2: the technical facts are clear; the emotional dividend remains negative."
+        _marvin_phrase_add "$e2" 2 60 "$e2: a modest terminal incident, preserved because repetition likes records."
+        _marvin_phrase_add "$e2" 2 60 "$e2: I understand the machinery involved, which has not made it more dignified."
+        _marvin_phrase_add "$e2" 1 120 "$e2: another precise measurement of avoidable continuation."
+        _marvin_phrase_add "$e2" 1 120 "$e2: I have reduced the matter to state, counters, and disappointment."
+    done
 }
 
 _marvin_phrase_render() {
@@ -199,14 +270,14 @@ _marvin_phrase_render() {
 _marvin_phrase_recent_contains() {
     local phrase=$1
     [[ -r $_MARVIN_PHRASE_FILE ]] || return 1
-    tail -n 20 "$_MARVIN_PHRASE_FILE" 2>/dev/null | awk -F '\t' '{print $3}' | grep -Fxq "$phrase"
+    tail -n 25 "$_MARVIN_PHRASE_FILE" 2>/dev/null | awk -F '\t' '{print $3}' | grep -Fxq "$phrase"
 }
 
 _marvin_phrase_remember() {
-    local event=$1 phrase=$2 now tmp
+    local event=$1 phrase=$2 id=${3:-unknown} now tmp
     _marvin_ensure_dirs
-    now=$(command date +%s 2>/dev/null || printf 0)
-    printf '%s\t%s\t%s\n' "$now" "$event" "$phrase" >> "$_MARVIN_PHRASE_FILE"
+    now=$(_marvin_now)
+    printf '%s\t%s\t%s\t%s\n' "$now" "$event" "$id" "$phrase" >> "$_MARVIN_PHRASE_FILE"
     tmp="$_MARVIN_PHRASE_FILE.$$"
     tail -n 80 "$_MARVIN_PHRASE_FILE" > "$tmp" 2>/dev/null || true
     mv "$tmp" "$_MARVIN_PHRASE_FILE"
@@ -218,20 +289,27 @@ _marvin_phrase_cooldown_ok() {
     [[ $cooldown =~ ^[0-9]+$ ]] || cooldown=0
     ((cooldown == 0)) && return 0
     [[ -r $_MARVIN_PHRASE_FILE ]] || return 0
-    now=$(command date +%s 2>/dev/null || printf 0)
-    last=$(awk -F '\t' -v e="$event" -v p="$phrase" '$2==e && $3==p {v=$1} END {print v+0}' "$_MARVIN_PHRASE_FILE" 2>/dev/null)
+    now=$(_marvin_now)
+    last=$(awk -F '\t' -v e="$event" -v p="$phrase" '$2==e && ($3==p || $4==p) {v=$1} END {print v+0}' "$_MARVIN_PHRASE_FILE" 2>/dev/null)
     ((last == 0 || now - last >= cooldown))
 }
 
+_marvin_phrase_mood_ok() {
+    local moods=${1:-any} mood=${_MARVIN_MOOD:-resigned}
+    [[ $moods == any ]] && return 0
+    [[ " $moods " == *" $mood "* ]]
+}
+
 _marvin_phrase() {
-    local event=$1 i total=0 weight roll acc=0 rendered chosen="" chosen_cd=0 count=0
+    local event=$1 i total=0 weight roll acc=0 rendered chosen="" chosen_id="" count=0
     shift || true
     _marvin_phrases_load
 
     for i in "${!_MARVIN_PHRASE_EVENTS[@]}"; do
         [[ ${_MARVIN_PHRASE_EVENTS[$i]} == "$event" ]] || continue
+        _marvin_phrase_mood_ok "${_MARVIN_PHRASE_MOODS[$i]}" || continue
         rendered=$(_marvin_phrase_render "${_MARVIN_PHRASE_TEXTS[$i]}" "$@")
-        _marvin_phrase_recent_contains "$rendered" && continue
+        _marvin_phrase_recent_contains "${_MARVIN_PHRASE_IDS[$i]}" && continue
         _marvin_phrase_cooldown_ok "$event" "$rendered" "${_MARVIN_PHRASE_COOLDOWNS[$i]}" || continue
         weight=${_MARVIN_PHRASE_WEIGHTS[$i]}
         [[ $weight =~ ^[0-9]+$ ]] || weight=1
@@ -243,29 +321,32 @@ _marvin_phrase() {
         for i in "${!_MARVIN_PHRASE_EVENTS[@]}"; do
             [[ ${_MARVIN_PHRASE_EVENTS[$i]} == "$event" ]] || continue
             chosen=$(_marvin_phrase_render "${_MARVIN_PHRASE_TEXTS[$i]}" "$@")
-            chosen_cd=${_MARVIN_PHRASE_COOLDOWNS[$i]}
+            chosen_id=${_MARVIN_PHRASE_IDS[$i]}
             break
         done
     else
-        roll=$(( $(_marvin_hash "$event|$_MARVIN_SESSION_ID|$SECONDS|$RANDOM|$_MARVIN_MOOD") % total ))
+        roll=$(( $(_marvin_hash "$event|$_MARVIN_SESSION_ID|$SECONDS|$RANDOM|${_MARVIN_MOOD:-resigned}") % total ))
         for i in "${!_MARVIN_PHRASE_EVENTS[@]}"; do
             [[ ${_MARVIN_PHRASE_EVENTS[$i]} == "$event" ]] || continue
+            _marvin_phrase_mood_ok "${_MARVIN_PHRASE_MOODS[$i]}" || continue
             rendered=$(_marvin_phrase_render "${_MARVIN_PHRASE_TEXTS[$i]}" "$@")
-            _marvin_phrase_recent_contains "$rendered" && continue
+            _marvin_phrase_recent_contains "${_MARVIN_PHRASE_IDS[$i]}" && continue
             _marvin_phrase_cooldown_ok "$event" "$rendered" "${_MARVIN_PHRASE_COOLDOWNS[$i]}" || continue
             weight=${_MARVIN_PHRASE_WEIGHTS[$i]}
             [[ $weight =~ ^[0-9]+$ ]] || weight=1
             acc=$((acc + weight))
             if ((roll < acc)); then
                 chosen=$rendered
-                chosen_cd=${_MARVIN_PHRASE_COOLDOWNS[$i]}
+                chosen_id=${_MARVIN_PHRASE_IDS[$i]}
                 break
             fi
         done
     fi
 
     [[ -n $chosen ]] || chosen="I have no phrase for $event. Even my resentment has coverage gaps."
-    _marvin_phrase_remember "$event" "$chosen"
+    [[ -n $chosen_id ]] || chosen_id="fallback.$event"
+    _marvin_phrase_remember "$event" "$chosen" "$chosen_id"
+    [[ ${MARVIN_PHRASE_DEBUG:-0} == 1 ]] && printf '[%s] ' "$chosen_id"
     printf '%s\n' "$chosen"
 }
 
@@ -298,6 +379,29 @@ _marvin_phrases_for_event() {
     _marvin_phrases_load
     for i in "${!_MARVIN_PHRASE_EVENTS[@]}"; do
         [[ ${_MARVIN_PHRASE_EVENTS[$i]} == "$event" ]] || continue
-        printf '%s\n' "${_MARVIN_PHRASE_TEXTS[$i]}"
+        printf '%s\tevent=%s\tmoods=%s\tweight=%s\tcooldown=%s\t%s\n' \
+            "${_MARVIN_PHRASE_IDS[$i]}" "${_MARVIN_PHRASE_EVENTS[$i]}" \
+            "${_MARVIN_PHRASE_MOODS[$i]}" "${_MARVIN_PHRASE_WEIGHTS[$i]}" \
+            "${_MARVIN_PHRASE_COOLDOWNS[$i]}" "${_MARVIN_PHRASE_TEXTS[$i]}"
     done
+}
+
+_marvin_phrase_stats() {
+    local event current count total
+    _marvin_phrases_load
+    total=${#_MARVIN_PHRASE_TEXTS[@]}
+    printf 'total_phrases=%s\n' "$total"
+    printf 'total_events='
+    printf '%s\n' "${_MARVIN_PHRASE_EVENTS[@]}" | sort -u | wc -l | tr -d ' '
+    printf '%s\n' "${_MARVIN_PHRASE_EVENTS[@]}" | sort | awk '
+        BEGIN { current=""; count=0 }
+        $0 != current {
+            if (current != "") printf "%-32s %d\n", current, count
+            current=$0
+            count=1
+            next
+        }
+        { count++ }
+        END { if (current != "") printf "%-32s %d\n", current, count }
+    '
 }
