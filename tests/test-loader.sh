@@ -26,11 +26,9 @@ run_i '
     for name in marvin status weather forecast thought sulk complain mood; do
         type "$name" >/dev/null 2>&1 || exit 1
     done
-    for old in haxstatus haxweather haxforecast haxoff haxon haxdoctor marvinstatus marvinweather marvinforecast marvindoctor; do
+    for old in marvinstatus marvinweather marvinforecast marvindoctor; do
         ! type "$old" >/dev/null 2>&1 || exit 1
     done
-    source "${1%/marvinrc.sh}/compatibility/legacy-hax.sh"
-    type haxstatus >/dev/null 2>&1
 '
 
 run_i '

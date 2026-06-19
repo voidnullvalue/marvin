@@ -2,8 +2,6 @@
 
 ## Unreleased
 
-- Removed default legacy `hax*` command loading and moved it to
-  `compatibility/legacy-hax.sh`.
 - Removed forced `HISTTIMEFORMAT`, `cmdhist`, and `histappend` mutations.
 - Added `uninstall.sh` for safe removal of Marvin's managed `.bashrc` source
   block and symlink.

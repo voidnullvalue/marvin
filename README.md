@@ -55,7 +55,6 @@ unrelated `.bashrc` content alone.
 - `lib/refusal.sh`: rare allowlisted theatrical refusal wrappers.
 - `lib/prompt.sh`: command timing, prompt rendering, benchmark.
 - `lib/commands.sh`: public command interface and shell hooks.
-- `compatibility/legacy-hax.sh`: optional old `hax*` aliases, not loaded by default.
 
 ## Public Commands
 
@@ -198,9 +197,3 @@ Add templates with `_marvin_phrase_add event weight cooldown "text"` in
 `lib/phrases.sh`, emit through `_marvin_say event key value`, then run
 `./tests/test-phrases.sh`. Lines must be original, event-specific, technically
 aware, dry, and concise.
-
-## Migration From The Old Haxx0r Version
-
-The default shell no longer loads `haxstatus`, `haxweather`, `haxforecast`,
-`haxoff`, `haxon`, or `haxdoctor`. Source `compatibility/legacy-hax.sh` manually
-after Marvin only if local shell snippets still depend on those names.
