@@ -87,8 +87,8 @@ _marvin_system_report() {
     printf '%s' "$_MV_BLUE"; _marvin_rule "$cols"; printf '%s' "$_MV_RESET"
 }
 
-marvinstatus() { _marvin_system_report; }
-marvinweather() {
+_marvin_cmd_status() { _marvin_system_report; }
+_marvin_cmd_weather() {
     local line
     if line=$(_marvin_weather_line force); then
         printf '%sWeather:%s %s\n' "$_MV_CYAN" "$_MV_RESET" "$line"
@@ -98,26 +98,32 @@ marvinweather() {
         return 1
     fi
 }
-marvinforecast() {
+_marvin_cmd_forecast() {
     local loc=${MARVIN_WEATHER_LOCATION// /+}
     command -v curl >/dev/null 2>&1 || { _marvin_say weather_failure detail 'curl is unavailable'; return 1; }
     curl -fsSL --compressed --connect-timeout 3 --max-time 12 "https://wttr.in${loc:+/$loc}?u"
 }
-marvinthought() { printf '%s%s%s\n' "$_MV_GREY" "$(_marvin_state_observation)" "$_MV_RESET"; }
-marvinsulk() { _marvin_say existential detail 'a direct request for sulking'; }
-marvincomplain() { _marvin_say rare_complaint detail 'the operator requested a complaint'; }
-marvinmood() { _marvin_mood; }
-marvinstate() { _marvin_state_dump; }
-marvinhistory() { _marvin_history_show; }
-marvinresetmood() { _marvin_reset_mood; printf '%s\n' "$(_marvin_phrase "mood:$_MARVIN_MOOD")"; }
+_marvin_cmd_thought() { printf '%s%s%s\n' "$_MV_GREY" "$(_marvin_state_observation)" "$_MV_RESET"; }
+_marvin_cmd_sulk() { _marvin_say existential detail 'a direct request for sulking'; }
+_marvin_cmd_complain() { _marvin_say rare_complaint detail 'the operator requested a complaint'; }
+_marvin_cmd_mood() {
+    case "${1:-}" in
+        --verbose) _marvin_mood_verbose ;;
+        "") _marvin_mood ;;
+        *) printf 'usage: marvin mood [--verbose]\n' >&2; return 2 ;;
+    esac
+}
+_marvin_cmd_state() { _marvin_state_dump; }
+_marvin_cmd_history() { _marvin_history_show; }
+_marvin_cmd_reset_mood() { _marvin_reset_mood; printf '%s\n' "$(_marvin_phrase "mood:$_MARVIN_MOOD")"; }
 
-marvinoff() {
+_marvin_cmd_off() {
     touch "$HOME/.marvinquiet"
     export MARVIN_QUIET=1
     _marvin_say quiet_enabled detail 'silence requested'
 }
 
-marvinon() {
+_marvin_cmd_on() {
     rm -f "$HOME/.marvinquiet"
     unset MARVIN_QUIET
     _marvin_say quiet_disabled detail 'personality restored'
@@ -141,23 +147,23 @@ marvin_personality_cmd() {
 marvin_refuse_cmd() {
     case "${1:-}" in
         on) export MARVIN_REFUSAL=1; printf 'Refusal enabled for eligible interactive commands.\n' ;;
-        off) export MARVIN_REFUSAL=0; printf 'Refusal disabled for this shell.\n' ;;
+        off) export MARVIN_REFUSAL=0; _marvin_say refusal_disabled detail 'refusal disabled'; printf 'Refusal disabled for this shell.\n' ;;
         *) printf 'usage: marvin refuse on|off\n' >&2; return 2 ;;
     esac
 }
 
-marvincooperate() {
+_marvin_cmd_cooperate() {
     _MARVIN_COOPERATE=1
-    _marvin_say refusal_bypassed detail 'cooperation requested for this shell'
+    _marvin_say cooperation_enabled detail 'cooperation requested for this shell'
 }
 
-marvinplease() {
+_marvin_cmd_please() {
     (($# > 0)) || { printf 'usage: marvin please command [args...]\n' >&2; return 2; }
     _marvin_say refusal_bypassed detail "$*"
     MARVIN_BYPASS=1 "$@"
 }
 
-marvindoctor() {
+_marvin_cmd_doctor() {
     local c missing=0
     for c in bash curl xbps-query xbps-install ip ps free df timeout sv git notify-send awk sed fold; do
         if command -v "$c" >/dev/null 2>&1; then
@@ -168,26 +174,44 @@ marvindoctor() {
         fi
     done
     if ((missing == 0)); then
-        printf '%s%s%s\n' "$_MV_GREY" "$(_marvin_phrase diagnostics_passing)" "$_MV_RESET"
+        printf '%s%s%s\n' "$_MV_GREY" "$(_marvin_phrase diagnostic_success detail 'optional utilities available')" "$_MV_RESET"
     else
-        printf '%s%s%s\n' "$_MV_GREY" "$(_marvin_phrase diagnostics_failing detail 'optional utilities missing')" "$_MV_RESET"
+        printf '%s%s%s\n' "$_MV_GREY" "$(_marvin_phrase diagnostic_failure detail 'optional utilities missing')" "$_MV_RESET"
     fi
     return "$missing"
 }
 
-marvinhelp() {
+_marvin_cmd_refusal_status() {
+    cat <<EOF
+enabled=${MARVIN_REFUSAL:-1}
+cooperate=$_MARVIN_COOPERATE
+session_refusals=$_MARVIN_REFUSALS_THIS_SESSION
+session_max=$MARVIN_REFUSAL_SESSION_MAX
+eligible_since_last=$MARVIN_STATE_REFUSAL_ELIGIBLE_COUNT
+cooldown_commands=$MARVIN_REFUSAL_COOLDOWN_COMMANDS
+last_refusal_at=$MARVIN_STATE_REFUSAL_LAST_AT
+cooldown_seconds=$MARVIN_REFUSAL_COOLDOWN_SECONDS
+status_code=$MARVIN_REFUSAL_STATUS
+EOF
+}
+
+_marvin_cmd_help() {
     cat <<'EOF'
 marvin status             show system report
 marvin weather            fetch cached/current weather
 marvin forecast           show wttr.in forecast
 marvin thought|sulk|complain
-marvin mood|state|history|reset-mood
+marvin mood [--verbose]
+marvin state|history|reset-mood
 marvin phrases EVENT      list phrase templates for an event
+marvin phrase-stats       report event coverage and phrase counts
 marvin cooperate          disable refusal for this shell
 marvin please CMD ...     run one command with MARVIN_BYPASS=1
 marvin refuse on|off      toggle refusal for this shell
+marvin refusal-status     show refusal counters and cooldowns
 marvin personality 0|1|2|3
 marvin debug on|off
+marvin benchmark          measure cached prompt overhead
 marvin doctor|help
 EOF
 }
@@ -196,25 +220,28 @@ marvin() {
     local sub=${1:-status}
     [[ $# -gt 0 ]] && shift || true
     case "$sub" in
-        status) marvinstatus "$@" ;;
-        weather) marvinweather "$@" ;;
-        forecast) marvinforecast "$@" ;;
-        thought) marvinthought "$@" ;;
-        sulk) marvinsulk "$@" ;;
-        complain) marvincomplain "$@" ;;
-        mood) marvinmood "$@" ;;
-        state) marvinstate "$@" ;;
-        history) marvinhistory "$@" ;;
-        reset-mood) marvinresetmood "$@" ;;
+        status) _marvin_cmd_status "$@" ;;
+        weather) _marvin_cmd_weather "$@" ;;
+        forecast) _marvin_cmd_forecast "$@" ;;
+        thought) _marvin_cmd_thought "$@" ;;
+        sulk) _marvin_cmd_sulk "$@" ;;
+        complain) _marvin_cmd_complain "$@" ;;
+        mood) _marvin_cmd_mood "$@" ;;
+        state) _marvin_cmd_state "$@" ;;
+        history) _marvin_cmd_history "$@" ;;
+        reset-mood) _marvin_cmd_reset_mood "$@" ;;
         phrases) _marvin_phrases_for_event "${1:-}" ;;
-        cooperate) marvincooperate "$@" ;;
-        please) marvinplease "$@" ;;
+        phrase-stats) _marvin_phrase_stats ;;
+        cooperate) _marvin_cmd_cooperate "$@" ;;
+        please) _marvin_cmd_please "$@" ;;
         refuse) marvin_refuse_cmd "$@" ;;
+        refusal-status) _marvin_cmd_refusal_status ;;
         personality) marvin_personality_cmd "$@" ;;
         debug) marvin_debug_cmd "$@" ;;
-        doctor) marvindoctor "$@" ;;
-        help|-h|--help) marvinhelp ;;
-        *) printf 'unknown marvin command: %s\n' "$sub" >&2; marvinhelp >&2; return 2 ;;
+        benchmark) _marvin_benchmark ;;
+        doctor) _marvin_cmd_doctor "$@" ;;
+        help|-h|--help) _marvin_cmd_help ;;
+        *) printf 'unknown marvin command: %s\n' "$sub" >&2; _marvin_cmd_help >&2; return 2 ;;
     esac
 }
 
@@ -222,7 +249,7 @@ command_not_found_handle() {
     local cmd=$1 suggestion='' candidates
     shift || true
     case "$cmd" in
-        apt|apt-get) suggestion=$(_marvin_phrase apt_misuse detail 'APT was requested on Void Linux') ;;
+        apt|apt-get) suggestion="$(_marvin_phrase apt_misuse detail 'APT was requested on Void Linux') Try: sudo xbps-install -S <package>." ;;
         pacman) suggestion='That belongs to Arch. This machine has enough problems already. Use xbps-install.' ;;
         dnf|yum) suggestion='RPM tooling is not installed. Use xbps-install, and let us never discuss this again.' ;;
         systemctl) suggestion='Void uses runit. Try: sudo sv status|start|stop|restart <service>' ;;
@@ -247,6 +274,7 @@ command_not_found_handle() {
 }
 
 sudo() {
+    local rc sudo_path
     if [[ ${1:-} == apt || ${1:-} == apt-get ]]; then
         shift || true
         printf '%s%s%s\n' "$_MV_GREY" "$(_marvin_phrase apt_misuse detail 'sudo apt was requested on Void Linux')" "$_MV_RESET" >&2
@@ -255,8 +283,13 @@ sudo() {
         return 127
     fi
     [[ $MARVIN_SUDO_COMMENTARY == 1 ]] && _marvin_say sudo_request detail 'sudo requested'
-    command /usr/bin/sudo "$@"
-    local rc=$?
+    sudo_path=$(type -P sudo 2>/dev/null)
+    if [[ -z $sudo_path ]]; then
+        printf 'sudo is not available.\n' >&2
+        return 127
+    fi
+    command "$sudo_path" "$@"
+    rc=$?
     if ((rc == 0)); then _marvin_say sudo_success detail 'sudo completed'; else _marvin_say sudo_failure detail "sudo exited $rc"; fi
     return "$rc"
 }
@@ -269,23 +302,13 @@ thought() { marvin thought "$@"; }
 sulk() { marvin sulk "$@"; }
 complain() { marvin complain "$@"; }
 mood() { marvin mood "$@"; }
-marvindoctor() { marvin doctor "$@"; }
-
-# Older names from the original wrapper.
-haxstatus() { status "$@"; }
-haxweather() { weather "$@"; }
-haxforecast() { forecast "$@"; }
-haxoff() { marvinoff "$@"; }
-haxon() { marvinon "$@"; }
-haxdoctor() { marvindoctor "$@"; }
 
 _marvin_init() {
     _marvin_ensure_dirs
     _marvin_state_load
     _marvin_mood_refresh
     _marvin_state_note_login
-    HISTTIMEFORMAT='[%F %T] '
-    shopt -s checkwinsize cmdhist histappend
+    shopt -s checkwinsize
 
     if [[ -e $HOME/.marvinquiet || ${MARVIN_QUIET:-0} == 1 || ${MARVIN_PERSONALITY_LEVEL:-2} == 0 ]]; then
         [[ ${MARVIN_PERSONALITY_LEVEL:-2} == 0 ]] && export MARVIN_QUIET=1
@@ -299,7 +322,7 @@ _marvin_init() {
     _marvin_prompt_install
     if [[ $MARVIN_LOGIN_REPORT == 1 && -z ${MARVIN_LOGIN_SHOWN:-} ]]; then
         export MARVIN_LOGIN_SHOWN=1
-        marvinstatus
+        _marvin_cmd_status
     else
         _marvin_say shell_startup detail 'shell startup'
     fi

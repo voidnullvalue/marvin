@@ -5,6 +5,8 @@ repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 target_dir="$HOME/.local/lib"
 target="$target_dir/marvinrc.sh"
 source_line='[[ -r "$HOME/.local/lib/marvinrc.sh" ]] && source "$HOME/.local/lib/marvinrc.sh"'
+begin_marker='# >>> marvin-terminal >>>'
+end_marker='# <<< marvin-terminal <<<'
 stamp="$(date +%Y%m%d-%H%M%S)"
 
 bash -n "$repo/marvinrc.sh" "$repo"/lib/*.sh
@@ -16,10 +18,13 @@ fi
 
 ln -sfn "$repo/marvinrc.sh" "$target"
 
-if ! grep -Fq 'source "$HOME/.local/lib/marvinrc.sh"' "$HOME/.bashrc" 2>/dev/null; then
+touch "$HOME/.bashrc"
+
+if ! grep -Fq "$source_line" "$HOME/.bashrc" 2>/dev/null; then
     {
-        printf '\n# Marvin terminal personality\n'
+        printf '\n%s\n' "$begin_marker"
         printf '%s\n' "$source_line"
+        printf '%s\n' "$end_marker"
     } >> "$HOME/.bashrc"
 fi
 

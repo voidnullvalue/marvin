@@ -7,6 +7,7 @@ _MARVIN_LAST_DURATION=0
 _MARVIN_LAST_STATUS=0
 _MARVIN_AT_PROMPT=1
 _MARVIN_CMD_START=
+_MARVIN_ORIGINAL_DEBUG_TRAP=""
 
 _marvin_capture_original_prompt_command() {
     local decl
@@ -51,8 +52,11 @@ _marvin_preexec() {
 }
 
 _marvin_update_command_state() {
-    local rc=$1 duration=$2 command_line=${3:-}
+    local rc=$1 duration=$2 command_line=${3:-} previous_rc previous_command
+    previous_rc=${MARVIN_STATE_LAST_EXIT:-0}
+    previous_command=${MARVIN_STATE_LAST_COMMAND:-}
     _MARVIN_SESSION_COMMAND_COUNT=$((_MARVIN_SESSION_COMMAND_COUNT + 1))
+    _MARVIN_STATE_COMMANDS_SINCE_FLUSH=$((_MARVIN_STATE_COMMANDS_SINCE_FLUSH + 1))
     MARVIN_STATE_LAST_EXIT=$rc
     if [[ -n $command_line && $command_line == "$MARVIN_STATE_LAST_COMMAND" ]]; then
         MARVIN_STATE_REPEATED_COMMANDS=$((MARVIN_STATE_REPEATED_COMMANDS + 1))
@@ -71,9 +75,33 @@ _marvin_update_command_state() {
         MARVIN_STATE_RECENT_LONG_COMMANDS=$((MARVIN_STATE_RECENT_LONG_COMMANDS - 1))
     fi
     MARVIN_STATE_LAST_COMMAND=$command_line
-    MARVIN_STATE_LAST_INTERACTION=$(command date +%s 2>/dev/null || printf 0)
-    _marvin_history_add command "$command_line -> $rc/${duration}s"
-    _marvin_state_save
+    MARVIN_STATE_LAST_INTERACTION=$(_marvin_now)
+    if ((rc != 0)); then
+        if ((MARVIN_STATE_CONSECUTIVE_FAILURES >= 2)); then
+            _marvin_mood_apply_event repeated_failure
+        else
+            _marvin_mood_apply_event command_failure
+        fi
+        _marvin_history_add command "$command_line -> $rc/${duration}s"
+    elif [[ -n $previous_command && $previous_rc != 0 && $previous_command != "$command_line" ]]; then
+        _marvin_mood_apply_event command_fixed
+        _marvin_history_add command_fixed "$command_line"
+    elif ((duration >= MARVIN_LONG_COMMAND_SECONDS)); then
+        _marvin_mood_apply_event long_success
+        _marvin_history_add long_success "$command_line -> ${duration}s"
+    else
+        _marvin_mood_apply_event ordinary_success
+    fi
+    if ((MARVIN_STATE_REPEATED_COMMANDS >= 2)); then
+        _marvin_mood_apply_event repeated_command
+        _marvin_history_add repeated_command "$command_line"
+    fi
+    _marvin_state_mark_dirty
+    if ((rc != 0 || duration >= MARVIN_LONG_COMMAND_SECONDS || MARVIN_STATE_REPEATED_COMMANDS >= 2)); then
+        _marvin_state_flush_if_needed 1
+    else
+        _marvin_state_flush_if_needed 0
+    fi
 }
 
 _marvin_comment_after_command() {
@@ -107,12 +135,13 @@ _marvin_comment_after_command() {
 
 _marvin_idle_check() {
     local now last idle
-    now=$(command date +%s 2>/dev/null || printf 0)
+    now=$(_marvin_now)
     last=${MARVIN_STATE_LAST_INTERACTION:-0}
     [[ $last =~ ^[0-9]+$ ]] || last=0
     idle=$((now - last))
     if ((idle >= 1800 && now - _MARVIN_LAST_IDLE_COMMENT >= 1800)); then
         _MARVIN_LAST_IDLE_COMMENT=$now
+        _marvin_mood_apply_event idle_return
         _marvin_say operator_returning duration "$idle"
     fi
 }
@@ -159,6 +188,33 @@ _marvin_prompt_dispatch() {
 
 _marvin_prompt_install() {
     _marvin_capture_original_prompt_command
+    _MARVIN_ORIGINAL_DEBUG_TRAP=$(trap -p DEBUG)
+    if [[ -n $_MARVIN_ORIGINAL_DEBUG_TRAP ]]; then
+        _marvin_debug "existing DEBUG trap detected; Marvin timing will replace it for this shell"
+    fi
     trap '_marvin_preexec' DEBUG
-    PROMPT_COMMAND=_marvin_prompt_dispatch
+    if declare -p PROMPT_COMMAND 2>/dev/null | grep -q '^declare -a'; then
+        PROMPT_COMMAND=(_marvin_prompt_dispatch)
+    else
+        PROMPT_COMMAND=_marvin_prompt_dispatch
+    fi
+    trap '_marvin_state_flush_on_exit' EXIT
+}
+
+_marvin_benchmark() {
+    local i start end total avg
+    _marvin_telemetry_refresh
+    start=$(command date +%s%N 2>/dev/null || printf 0)
+    for i in {1..25}; do
+        _marvin_telemetry_refresh
+        _marvin_git_prompt "$_MARVIN_T_GIT" >/dev/null
+    done
+    end=$(command date +%s%N 2>/dev/null || printf 0)
+    if [[ $start =~ ^[0-9]+$ && $end =~ ^[0-9]+$ && $end -gt $start ]]; then
+        total=$(((end - start) / 1000000))
+        avg=$((total / 25))
+        printf 'cached_prompt_approx_ms=%s\n' "$avg"
+    else
+        printf 'cached_prompt_approx_ms=unknown\n'
+    fi
 }

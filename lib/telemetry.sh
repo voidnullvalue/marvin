@@ -177,7 +177,10 @@ _marvin_observe_state_changes() {
     old=${MARVIN_STATE_LAST_WARNINGS:-none}
     if [[ $old != "$warnings" && $old != none && $warnings == none ]]; then
         _MARVIN_RECOVERY_FLAG=1
+        _marvin_mood_apply_event warning_recovered
         _marvin_say system_recovery detail "$old"
+    elif [[ $warnings != none ]]; then
+        _marvin_mood_apply_event warning_seen
     fi
     MARVIN_STATE_LAST_WARNINGS=$warnings
 
@@ -200,11 +203,12 @@ _marvin_observe_state_changes() {
     git=$_MARVIN_T_GIT
     if [[ -n $MARVIN_STATE_LAST_GIT_STATE && $git != "$MARVIN_STATE_LAST_GIT_STATE" ]]; then
         case "$git" in
-            clean:*) _marvin_say clean_git detail "$git" ;;
-            dirty:*) _marvin_say dirty_git detail "$git" ;;
+            clean:*) _marvin_mood_apply_event clean_git; _marvin_say clean_git detail "$git" ;;
+            dirty:*) _marvin_mood_apply_event dirty_git; _marvin_say dirty_git detail "$git" ;;
             detached:*) _marvin_say detached_head detail "$git" ;;
         esac
     fi
     MARVIN_STATE_LAST_GIT_STATE=$git
-    _marvin_state_save
+    _marvin_state_mark_dirty
+    _marvin_state_flush_if_needed 0
 }

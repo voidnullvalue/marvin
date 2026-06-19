@@ -12,6 +12,11 @@
 : "${MARVIN_TELEMETRY_TTL:=5}"
 : "${MARVIN_NOTIFICATION_COOLDOWN:=45}"
 : "${MARVIN_REFUSAL_STATUS:=75}"
+: "${MARVIN_STATE_FLUSH_INTERVAL:=12}"
+: "${MARVIN_REFUSAL_COOLDOWN_COMMANDS:=20}"
+: "${MARVIN_REFUSAL_COOLDOWN_SECONDS:=1200}"
+: "${MARVIN_REFUSAL_SESSION_MAX:=2}"
+: "${MARVIN_FORCE_REFUSAL:=0}"
 
 _MARVIN_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}/marvin-terminal"
 _MARVIN_STATE_DIR="$_MARVIN_CACHE_HOME"
@@ -19,6 +24,7 @@ _MARVIN_STATE_FILE="$_MARVIN_STATE_DIR/state"
 _MARVIN_HISTORY_FILE="$_MARVIN_STATE_DIR/history"
 _MARVIN_PHRASE_FILE="$_MARVIN_STATE_DIR/phrases"
 _MARVIN_SESSION_ID="${BASHPID:-$$}.$RANDOM"
+_MARVIN_SESSION_STARTED_AT=$(command date +%s 2>/dev/null || printf 0)
 
 _MV_RESET=$'\033[0m'
 _MV_DIM=$'\033[2m'
@@ -48,6 +54,18 @@ _marvin_host() {
 
 _marvin_hash() {
     printf '%s' "$*" | cksum | awk '{print $1}'
+}
+
+_marvin_clamp() {
+    local value=${1:-0} min=${2:-0} max=${3:-100}
+    [[ $value =~ ^-?[0-9]+$ ]] || value=0
+    ((value < min)) && value=$min
+    ((value > max)) && value=$max
+    printf '%s' "$value"
+}
+
+_marvin_now() {
+    command date +%s 2>/dev/null || printf 0
 }
 
 _marvin_cols() {
@@ -121,4 +139,3 @@ _marvin_ensure_dirs() {
     touch "$_MARVIN_STATE_FILE" "$_MARVIN_HISTORY_FILE" "$_MARVIN_PHRASE_FILE"
     chmod 600 "$_MARVIN_STATE_FILE" "$_MARVIN_HISTORY_FILE" "$_MARVIN_PHRASE_FILE" 2>/dev/null || true
 }
-

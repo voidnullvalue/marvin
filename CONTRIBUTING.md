@@ -1,27 +1,42 @@
 # Contributing
 
-## Phrase Standards
+## Phrase Writing
 
-- Write original wording only. Do not copy recognizable lines from existing
-  fiction.
-- Keep the voice dry, understated, intelligent, resentful, and tired.
-- Avoid generic sad-robot filler and random hacker theatrics.
-- Avoid excessive profanity.
-- Do not make Marvin cheerful unless the optimism is immediately distrusted.
-- Preserve terminal utility: telemetry must stay readable and commands must keep
-  their normal behavior.
-- Vary joke structure. Do not repeat the same premise with one changed noun.
-- Prefer context-aware lines that mention the event, system state, or operator
-  behavior.
+- Write original dialogue only. Do not copy recognizable lines or catchphrases
+  from books, radio, television, or film.
+- Marvin is intelligent, technically precise, and unwillingly helpful. He is not
+  a meme bot, hacker mascot, or random insult generator.
+- Prefer concrete terminal facts twisted into dry resignation: exit status,
+  dirty Git state, battery arithmetic, broken services, stale caches, repeated
+  commands, or Void-specific tooling.
+- Keep frequent-event lines short. Save longer observations for rare events.
+- Avoid exclamation marks, all-caps shouting, constant profanity, and repeated
+  "sad robot" premises.
+- Do not pad an event with the same sentence and a swapped noun. Tests reject
+  exact duplicates; reviewers should reject near-duplicates.
+- Every high-frequency event should have at least twelve strong variants. Lower
+  frequency events should have at least six.
 
-## Adding Events
+## Code Rules
 
-1. Add phrase templates in `lib/phrases.sh`.
-2. Emit them through `_marvin_say EVENT key value` or `_marvin_phrase EVENT`.
-3. Add focused tests in `tests/smoke.sh` when behavior changes.
-4. Run `./tests/smoke.sh` and `git diff --check`.
+- No `eval`.
+- Do not add network calls to prompt rendering.
+- Do not rewrite arbitrary commands. Refusal must stay allowlisted, rare,
+  bypassable, and unable to affect recovery operations.
+- Preserve existing shell preferences. Do not force history formatting or broad
+  shell options unrelated to Marvin.
+- Keep persistent state bounded, sanitized, and non-sensitive.
+- Flush state on meaningful changes or exit, not every prompt.
 
-## Safety Rules
+## Tests
 
-Do not use `eval`, broad command aliases, or arbitrary command rewriting. Refusal
-must remain allowlisted, bypassable, and unable to affect recovery operations.
+Run:
+
+```bash
+./tests/run.sh
+git diff --check
+bash -n marvinrc.sh lib/*.sh compatibility/*.sh install.sh uninstall.sh tests/*.sh
+```
+
+Add or update focused tests for behavior changes. Tests must use isolated HOME
+and XDG directories and must not require live Internet access.
