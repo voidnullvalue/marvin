@@ -81,6 +81,7 @@ _marvin_wrap_harmless() {
     MARVIN_BYPASS=1 command "$cmd" "$@"
 }
 
+unalias ls date whoami uptime fortune cowsay clear fastfetch 2>/dev/null || true
 ls() { _marvin_wrap_harmless ls "$@"; }
 date() { _marvin_wrap_harmless date "$@"; }
 whoami() { _marvin_wrap_harmless whoami "$@"; }
