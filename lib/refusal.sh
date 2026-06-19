@@ -1,9 +1,10 @@
 # Rare theatrical refusal. This intentionally wraps only known harmless commands.
 
 _MARVIN_COOPERATE=0
+_MARVIN_REFUSALS_THIS_SESSION=0
 
 _marvin_refusal_enabled() {
-    _marvin_is_interactive_tty || return 1
+    [[ ${MARVIN_FORCE_REFUSAL:-0} == 1 ]] || _marvin_is_interactive_tty || return 1
     [[ ${MARVIN_REFUSAL:-1} != 0 ]] || return 1
     [[ ${MARVIN_BYPASS:-0} != 1 ]] || return 1
     ((_MARVIN_COOPERATE == 0)) || return 1
@@ -19,9 +20,18 @@ _marvin_refusal_eligible() {
 }
 
 _marvin_should_refuse() {
-    local cmd=$1 seed rate mood_bonus abuse_bonus roll
+    local cmd=$1 seed rate mood_bonus abuse_bonus roll now since
     _marvin_refusal_enabled || return 1
     _marvin_refusal_eligible "$cmd" || return 1
+    ((_MARVIN_REFUSALS_THIS_SESSION < MARVIN_REFUSAL_SESSION_MAX)) || return 1
+    MARVIN_STATE_REFUSAL_ELIGIBLE_COUNT=$((MARVIN_STATE_REFUSAL_ELIGIBLE_COUNT + 1))
+    _marvin_state_mark_dirty
+    now=$(_marvin_now)
+    since=$((now - MARVIN_STATE_REFUSAL_LAST_AT))
+    if [[ ${MARVIN_FORCE_REFUSAL:-0} != 1 ]]; then
+        ((MARVIN_STATE_REFUSAL_ELIGIBLE_COUNT >= MARVIN_REFUSAL_COOLDOWN_COMMANDS)) || return 1
+        ((since >= MARVIN_REFUSAL_COOLDOWN_SECONDS)) || return 1
+    fi
     case " ${_MARVIN_MOOD:-resigned} " in
         *" irritable "*|*" wounded "*|*" catatonic "*|*" sulking "*) mood_bonus=1 ;;
         *) mood_bonus=0 ;;
@@ -34,6 +44,9 @@ _marvin_should_refuse() {
     rate=$((rate + mood_bonus + abuse_bonus))
     ((rate > 8)) && rate=8
     ((rate <= 0)) && return 1
+    if [[ ${MARVIN_FORCE_REFUSAL:-0} == 1 ]]; then
+        return 0
+    fi
     seed=$(_marvin_hash "refuse|$cmd|$SECONDS|$RANDOM|$_MARVIN_SESSION_ID|$_MARVIN_MOOD")
     roll=$((seed % 100))
     ((roll < rate))
@@ -44,6 +57,10 @@ _marvin_refuse_command() {
     shift || true
     printable=$(_marvin_sanitize_text "$cmd${*:+ $*}")
     MARVIN_STATE_REFUSAL_COUNT=$((MARVIN_STATE_REFUSAL_COUNT + 1))
+    MARVIN_STATE_REFUSAL_LAST_AT=$(_marvin_now)
+    MARVIN_STATE_REFUSAL_ELIGIBLE_COUNT=0
+    _MARVIN_REFUSALS_THIS_SESSION=$((_MARVIN_REFUSALS_THIS_SESSION + 1))
+    _marvin_mood_apply_event refusal
     _marvin_state_save
     _marvin_history_add refusal "$printable"
     printf '%s' "$_MV_GREY" >&2
@@ -72,4 +89,3 @@ fortune() { _marvin_wrap_harmless fortune "$@"; }
 cowsay() { _marvin_wrap_harmless cowsay "$@"; }
 clear() { _marvin_wrap_harmless clear "$@"; }
 fastfetch() { _marvin_wrap_harmless fastfetch "$@"; }
-
