@@ -4,8 +4,6 @@ Marvin Terminal is an interactive Bash personality layer for Void Linux systems:
 a compact telemetry prompt plus a persistent, context-aware, miserable machine
 that comments on shell activity with more intelligence than the work deserves.
 
-It is not a greenfield shell. Normal commands still run normally. Prompt
-rendering does not fetch weather or make network requests.
 
 ## Example Transcript
 
